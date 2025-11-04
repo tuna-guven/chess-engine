@@ -1,0 +1,1 @@
+For the dataset I used chess games played in August of 2025 by 2300+ rated players from [Lichess](https://lichess.org). You can download the dataset from here: [August 2025](https://database.nikonoel.fr/lichess_elite_2025-08.zip)

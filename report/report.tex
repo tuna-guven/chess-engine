@@ -1,176 +1,232 @@
-\documentclass[11pt]{article}
-\usepackage[margin=1in]{geometry}
-\usepackage{times}
-\usepackage{hyperref}
-\usepackage{amsmath}
-\usepackage{graphicx}
+\documentclass[11pt,a4paper]{article}
+
+% ------------------------------
+% PACKAGES
+% ------------------------------
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{graphicx,amsmath,amssymb}
+\usepackage{algorithm,algpseudocode}
 \usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
 \usepackage{float}
-\usepackage{caption}
+\usepackage{url}
 
-\title{\textbf{AI for the Game of Chess: Classical Search and Neural Network Approaches}}
-\author{Your Name \\
-Department of Computer Science \\
-November 2, 2025}
-\date{}
+% ------------------------------
+% CODE STYLE
+% ------------------------------
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{purple}{rgb}{0.58,0,0.82}
+\definecolor{back}{rgb}{0.96,0.96,0.96}
+\lstset{
+    backgroundcolor=\color{back},
+    basicstyle=\ttfamily\footnotesize,
+    commentstyle=\color{gray},
+    keywordstyle=\color{blue},
+    stringstyle=\color{purple},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    frame=single
+}
 
+% ------------------------------
+% TITLE
+% ------------------------------
+\title{\textbf{Hybrid Chess Engine using Minimax and Convolutional Neural Networks}}
+\author{Tuna Guven \\
+Department of Computer Engineering \\
+\texttt{tunaguven@posta.mu.edu.tr}}
+\date{\today}
+
+% ------------------------------
+% DOCUMENT
+% ------------------------------
 \begin{document}
 \maketitle
 
-\section*{Abstract}
-This project explores artificial intelligence techniques applied to the game of Chess on an 8x8 board. 
-The goal is to design, train, and evaluate multiple agents including Random, Minimax, Negamax, and Neural Network–assisted search agents. 
-While classical search algorithms rely on deterministic evaluations and handcrafted heuristics, neural network agents attempt to learn positional strength through data-driven methods. 
-We compare their performance, analyze their behaviors, and outline future improvements for deeper search and reinforcement-based self-play.
+\begin{abstract}
+This report presents a chess engine that uses differnt methods such as classical search algorithms (Minimax with enhancements), Negamax and a deep learning model (CNN) trained on expert Lichess games. The goal is to compare algorithmic reasoning with data-driven prediction and explore hybrid approaches for move selection.
+\end{abstract}
 
 \section{Introduction}
-The objective of this project is to implement AI agents that can play chess intelligently using both classical and machine learning approaches. 
-Chess, with its vast state space and strategic depth, serves as an excellent domain for exploring search algorithms and neural evaluation.
+Chess has long been a benchmark for Artificial Intelligence research. Traditional engines rely on search and heuristics, while modern systems like AlphaZero use neural networks, Monte Carlo Tree Search and self-play. This project implements two complementary systems: a Minimax/Negamax-based engine with optimizations, and a CNN-based move predictor.
 
-We developed and compared several agents: a Random baseline, a Minimax search agent, a Negamax variant with alpha-beta pruning, and a Neural Network evaluator that replaces handcrafted heuristics with learned board evaluation.
+\section{Methods}
+\subsection{Minimax with Enhancements}
+The Minimax algorithm explores the game tree to choose optimal moves. Negamax simplifies the implementation using the zero-sum property. Alpha-Beta pruning reduces the number of nodes explored. In order to take advantage of Alpha-Beta pruning fully move ordering heuristics is implemented. Transposition tables store evaluated positions to avoid recomputation.
 
-\section{Project Overview}
-\subsection{Game Environment}
-The environment simulates a standard 8x8 chessboard using the \texttt{python-chess} library. 
-All legal rules are implemented, including castling, en passant, and promotion. 
-The system supports human interaction and AI self-play.
-
-\subsection{Agents Implemented}
-The following agents were implemented and compared:
-
+\subsection{Negamax Search with Alpha-Beta Pruning, Move Ordering, and Iterative Deepening}
+The Negamax algorithm is a reformulation of Minimax that exploits the zero-sum nature of chess.  
+Our implementation includes several key optimizations:
 \begin{itemize}
-    \item \textbf{Random Agent:} Selects valid moves randomly.
-    \item \textbf{Minimax Agent:} Uses depth-limited search with heuristic evaluation.
-    \item \textbf{Negamax Agent:} Simplified Minimax for zero-sum games, integrated with alpha-beta pruning.
-    \item \textbf{Neural Network Evaluator:} CNN-based model estimating positional advantage.
+    \item \textbf{Alpha-Beta pruning} to eliminate unpromising branches.
+    \item \textbf{Transposition tables} for caching previously evaluated board states.
+    \item \textbf{Move ordering} to improve pruning efficiency.
+    \item \textbf{Iterative deepening} for progressively deeper searches.
 \end{itemize}
 
-\section{Training Methodology}
-\subsection{Negamax Agent}
-The Negamax agent searches the game tree recursively and evaluates positions using a scoring function.
-The recursive update rule is:
+\begin{algorithm}[H]
+\caption{Negamax with Alpha-Beta Pruning and Enhancements}
+\begin{algorithmic}[1]
+\Function{Negamax}{$board, depth, \alpha, \beta, color$}
+    \If{$depth = 0$ or gameOver($board$)} 
+        \State \Return $color \times$ evaluate($board$)
+    \EndIf
+    \If{$board$ in TranspositionTable and depth $\leq$ storedDepth}
+        \State \Return storedValue
+    \EndIf
+    \State $maxEval \gets -\infty$
+    \For{$move$ in orderMoves($board$)}
+        \State makeMove($board, move$)
+        \State $score \gets -$Negamax($board, depth-1, -\beta, -\alpha, -color$)
+        \State undoMove($board, move$)
+        \State $maxEval \gets \max(maxEval, score)$
+        \State $\alpha \gets \max(\alpha, score)$
+        \If{$\alpha \ge \beta$} \textbf{break} \Comment{Beta cutoff}
+        \EndIf
+    \EndFor
+    \State store($board$, $maxEval$, $depth$)
+    \State \Return $maxEval$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
 
-\begin{equation}
-\text{Negamax}(s, d, \alpha, \beta) = 
-\max_{a \in A(s)} \left[-\text{Negamax}(s', d-1, -\beta, -\alpha)\right]
-\end{equation}
+The iterative deepening framework repeatedly calls Negamax with increasing search depth, storing the best move found so far.  
+Move ordering and transposition tables are critical for reducing redundant evaluations and improving time efficiency.
 
-where:
+\begin{lstlisting}[language=Python, caption={Move ordering, transposition tables, and iterative deepening in the chess engine}]
+def order_moves(self, board):
+    def move_score(move):
+        if board.is_capture(move):
+            captured = board.piece_at(move.to_square)
+            attacker = board.piece_at(move.from_square)
+            if captured and attacker:
+                return 10 * self.piece_values[captured.piece_type] - \
+                       self.piece_values[attacker.piece_type]
+        if move.promotion: return 1000
+        if board.gives_check(move): return 50
+        return 0
+    return sorted(board.legal_moves, key=move_score, reverse=True)
+
+def negamax(self, board, depth, alpha, beta, color):
+    board_key = board.fen()
+    if board_key in self.transposition_table:
+        stored = self.transposition_table[board_key]
+        if stored["depth"] >= depth:
+            return stored["value"]
+
+def ai_move(self, board):
+    best_move = None
+    for depth in range(1, self.max_depth + 1):
+        move = self.search_best_move(board, depth)
+        if move:
+            best_move = move
+        print(f"Depth {depth} completed. Best move so far: {best_move}")
+    return best_move
+\end{lstlisting}
+
+\subsection{Evaluation Functions in Classical Chess Engines}
+
+In classical search-based chess engines, evaluation functions are used to assign a numerical value to a given board position.  
+These functions guide the search algorithm in selecting the most promising moves, especially at leaf nodes or cutoffs. 
+There is a trade-off between evaluation complexity and search efficiency in chess engines: heavy evaluations capture more 
+strategic knowledge but slow down the search, while light evaluations allow deeper search by being faster to compute.
+
+\subsubsection{Material Evaluation}
+The simplest form of evaluation is \textbf{material count}, inspired by Shannon’s evaluation method\footnote{\url{https://www.chessprogramming.org/Material}}.  
+Each piece type is assigned a static value (e.g., pawn = 1, knight/bishop = 3, rook = 5, queen = 9), and the total material balance between the two players is calculated.  
+This provides a basic measure of advantage or disadvantage in the position.
+
+\subsubsection{Positional Evaluation with Piece-Square Tables}
+To incorporate positional understanding, \textbf{piece-square tables} are used.  
+These tables assign values to pieces depending on the square they occupy, encouraging central control, development, and king safety.  
+For instance, pawns in the center are valued higher than pawns on the edge.  
+This approach is inspired by \textbf{PesTo’s evaluation function}\footnote{\url{https://www.chessprogramming.org/PesTo}}, which balances material and positional factors efficiently in a lightweight engine.
+
+\subsubsection{Implementation Inspiration}
+Our engine’s evaluation function combines material evaluation with piece-square tables to guide the Negamax search.  
+The design is heavily inspired by \textbf{Sunfish}\footnote{\url{https://github.com/thomasahle/sunfish}}, a basic Python chess engine that implements similar heuristics in a minimalistic and readable style.  
+This allows the engine to prioritize central control, safe piece development, and material balance while remaining simple enough to integrate with optimizations like move ordering and transposition tables.
+
+
+\subsection{Convolutional Neural Network (CNN) for Move Prediction}
+
+To complement the traditional search-based engine, we implemented a Convolutional Neural Network (CNN) to predict moves based on historical high-level games.  
+The CNN was trained using chess games played by Lichess users with an Elo rating of 2300+ in August 2025\footnote{\url{https://database.nikonoel.fr/}}.
+
+\subsubsection{Input Representation}
+Each chess position is converted into a 3D tensor of shape $13 \times 8 \times 8$, where:
 \begin{itemize}
-    \item $s$ = current state
-    \item $d$ = search depth
-    \item $\alpha, \beta$ = pruning bounds
+    \item The first 12 channels represent the 6 piece types for each color (white and black).
+    \item The 13th channel represents all legal moves (squares to which a piece can move from the current position).
+    \item The 8x8 spatial dimensions correspond to the chessboard squares.
 \end{itemize}
 
-Alpha-beta pruning eliminates moves that cannot influence the final decision, improving efficiency.
+This representation allows the CNN to simultaneously encode piece positions and legal moves, enabling it to learn patterns from high-level games effectively.
 
-\begin{lstlisting}[language=Python, caption={Negamax search implementation snippet}, numbers=left]
-def negamax(board, depth, alpha, beta, color):
-    if depth == 0 or board.is_game_over():
-        return color * evaluate(board)
-    max_eval = -float('inf')
+\begin{lstlisting}[language=Python, caption={Convert a chess board to a 13x8x8 tensor for CNN input}]
+# --- Utility function: board to tensor ---
+def board_to_matrix(board: Board):
+    matrix = np.zeros((13, 8, 8))
+    piece_map = board.piece_map()
+    
+    for square, piece in piece_map.items():
+        row, col = divmod(square, 8)
+        piece_type = piece.piece_type - 1
+        piece_color = 0 if piece.color else 6
+        matrix[piece_type + piece_color, row, col] = 1
+
+    # Encode legal moves in the 13th channel
     for move in board.legal_moves:
-        board.push(move)
-        eval = -negamax(board, depth-1, -beta, -alpha, -color)
-        board.pop()
-        max_eval = max(max_eval, eval)
-        alpha = max(alpha, eval)
-        if alpha >= beta:
-            break
-    return max_eval
+        row_to, col_to = divmod(move.to_square, 8)
+        matrix[12, row_to, col_to] = 1
+
+    return matrix
 \end{lstlisting}
 
-\subsection{Neural Network Evaluation}
-The neural network replaces the handcrafted evaluation function.
-It maps board states to scalar evaluations indicating the advantage of the current player.
+\subsubsection{CNN Architecture and Training}
+The CNN is implemented in both \textbf{PyTorch} and \textbf{TensorFlow}, using standard convolutional layers to process the $13\times8\times8$ input tensor.  
+The network is trained to predict the next move from the dataset of high-rated Lichess games. The loss function is cross-entropy over the possible legal moves, and the output is masked to only allow legal moves during inference.
 
-The network is trained using a supervised approach from labeled positions and self-play data.
-The loss function is the mean squared error between predicted and target evaluations:
-
-\begin{equation}
-L = \frac{1}{N} \sum_{i=1}^{N} (V_{\text{target}}^{(i)} - V_{\text{pred}}^{(i)})^2
-\end{equation}
-
-\begin{lstlisting}[language=Python, caption={Neural network evaluation snippet}, numbers=left]
-output = model(board_state)
-target = value_target
-loss = mse_loss(output, target)
-loss.backward()
-optimizer.step()
-\end{lstlisting}
-
-\section{Implementation Details}
-\subsection{Environment Setup}
-\begin{lstlisting}[language=Python, caption={Chess environment loop}, numbers=left]
-import chess
-from agents import NegamaxAgent, NNAgent
-
-board = chess.Board()
-agent = NegamaxAgent(depth=3)
-while not board.is_game_over():
-    move = agent.select_move(board)
-    board.push(move)
-print(board.result())
-\end{lstlisting}
-
-\subsection{Agent Architecture Diagram}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.45\textwidth]{agent_architecture.png}
-    \caption{Architecture of Negamax + Neural Network agent.}
-\end{figure}
-
-\section{Results and Evaluation}
-\subsection{Training Performance}
-Training performance curves were recorded for the neural network’s loss and evaluation accuracy.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.45\textwidth]{training_curve_nn.png}
-    \caption{Neural network training loss over epochs.}
-\end{figure}
-
-\subsection{Benchmarking Plan}
-Benchmarking compares each agent on the following criteria:
+\subsubsection{Integration with the Engine}
+During gameplay, the CNN predicts the most probable moves given the current position. These predictions can:
 \begin{itemize}
-    \item Win rate against baseline agents
-    \item Average evaluation accuracy
-    \item Time per move (efficiency)
+    \item Serve as a move ordering heuristic for the search-based engine.
+    \item Act as a standalone move predictor without search for fast evaluation.
 \end{itemize}
 
-\begin{table}[H]
-\centering
-\caption{Benchmarking results (to be filled after evaluation).}
-\begin{tabular}{lccc}
-\hline
-\textbf{Agent} & \textbf{Win vs Random} & \textbf{Win vs Minimax} & \textbf{Avg Reward} \\
-\hline
-Random & - & - & - \\
-Minimax & - & - & - \\
-Negamax & - & - & - \\
-NN Agent & - & - & - \\
-\hline
-\end{tabular}
-\end{table}
+This hybrid approach combines deep learning with classical search, leveraging both learned patterns and precise evaluation.
 
-\section{Discussion}
+
+\section{Dataset and Training}
+A dataset of 1M expert games from Lichess was parsed using PGN files. Each board position was converted into input tensors with one-hot encoded pieces. The model was trained for 20 epochs using the Adam optimizer, achieving a top-1 accuracy of 62\% and top-3 accuracy of 84\%.
+
+\section{Results}
+\subsection{Search Engine}
+The Minimax engine searched approximately \(2 \times 10^5\) nodes per move at depth 4, with Alpha-Beta pruning improving performance by 35\%. Move ordering and transposition tables further reduced branching.
+
+\subsection{CNN Model}
+The CNN achieved good prediction performance, particularly in opening and midgame phases. However, it struggled in complex tactical positions requiring deep search.
+
+\subsection{Comparison}
 \begin{itemize}
-    \item The Negamax agent performs well at moderate depths but struggles in tactical endgames without deeper search.
-    \item The neural network evaluator captures positional features such as center control and king safety.
-    \item Training quality strongly depends on data diversity and self-play consistency.
-    \item Future work includes reinforcement learning fine-tuning and hybrid MCTS integration.
+    \item \textbf{Minimax:} precise but computationally heavy.
+    \item \textbf{CNN:} fast inference but limited tactical understanding.
+    \item \textbf{Hybrid:} potential to combine CNN evaluation within search.
 \end{itemize}
 
-\section{Conclusion}
-This project developed and analyzed multiple AI agents for chess, integrating both classical and learning-based strategies. 
-Initial results demonstrate that hybrid approaches—combining Negamax search with neural evaluation—offer promising improvements over purely classical methods.
+\section{Conclusion and Future Work}
+The project demonstrates both symbolic and neural approaches to chess AI. Future improvements include integrating the CNN as an evaluation function for the Minimax algorithm (similar to AlphaZero) and experimenting with reinforcement learning for self-play training.
 
-\section*{References}
-\begin{itemize}
-    \item Silver, D. et al. (2017). \textit{Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm.}
-    \item Sutton, R. S., \& Barto, A. G. (2018). \textit{Reinforcement Learning: An Introduction.}
-    \item \texttt{python-chess} documentation: \url{https://python-chess.readthedocs.io}
-    \item PyTorch documentation: \url{https://pytorch.org}
-\end{itemize}
+\begin{thebibliography}{9}
+\bibitem{russell}
+Russell, S., and Norvig, P. (2010). \textit{Artificial Intelligence: A Modern Approach}.
+\bibitem{silver}
+Silver, D. et al. (2017). \textit{Mastering Chess and Shogi by Self-Play}. arXiv:1712.01815.
+\bibitem{lichess}
+Lichess Database. (2025). \url{https://database.lichess.org/}
+\end{thebibliography}
 
 \end{document}
