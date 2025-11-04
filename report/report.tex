@@ -134,11 +134,6 @@ These functions guide the search algorithm in selecting the most promising moves
 There is a trade-off between evaluation complexity and search efficiency in chess engines: heavy evaluations capture more 
 strategic knowledge but slow down the search, while light evaluations allow deeper search by being faster to compute.
 
-\subsubsection{Material Evaluation}
-The simplest form of evaluation is \textbf{material count}, inspired by Shannon’s evaluation method\footnote{\url{https://www.chessprogramming.org/Material}}.  
-Each piece type is assigned a static value (e.g., pawn = 1, knight/bishop = 3, rook = 5, queen = 9), and the total material balance between the two players is calculated.  
-This provides a basic measure of advantage or disadvantage in the position.
-
 \subsubsection{Positional Evaluation with Piece-Square Tables}
 To incorporate positional understanding, \textbf{piece-square tables} are used.  
 These tables assign values to pieces depending on the square they occupy, encouraging central control, development, and king safety.  
@@ -167,7 +162,6 @@ Each chess position is converted into a 3D tensor of shape $13 \times 8 \times 8
 This representation allows the CNN to simultaneously encode piece positions and legal moves, enabling it to learn patterns from high-level games effectively.
 
 \begin{lstlisting}[language=Python, caption={Convert a chess board to a 13x8x8 tensor for CNN input}]
-# --- Utility function: board to tensor ---
 def board_to_matrix(board: Board):
     matrix = np.zeros((13, 8, 8))
     piece_map = board.piece_map()
@@ -186,39 +180,113 @@ def board_to_matrix(board: Board):
     return matrix
 \end{lstlisting}
 
+
+\subsubsection{Data Preprocessing for CNN}
+
+To train the CNN model, each chess game is converted into a sequence of board positions and corresponding next moves. The board is represented as a $13\times8\times8$ tensor using the \texttt{board\_to\_matrix} function, while the next move is stored in the Universal Chess Interface (UCI) format as the target.
+
+\begin{lstlisting}[language=Python, caption={Creating input and target data for the CNN}]
+def create_input_for_nn(games):
+    X = []
+    y = []
+    for game in games:
+        board = game.board()
+        for move in game.mainline_moves():
+            X.append(board_to_matrix(board))  # board position tensor
+            y.append(move.uci())              # next move in UCI format
+            board.push(move)
+    return np.array(X, dtype=np.float32), np.array(y)
+
+X, y_uci = create_input_for_nn(games)
+\end{lstlisting}
+
+In the code above:
+- Each element in \texttt{X} represents a board position during the game, converted into a $13\times8\times8$ tensor.
+- Each element in \texttt{y} is the next move, represented in UCI format.
+
+Next, the UCI-formatted moves are converted into integer labels. Then, the board positions are processed using the \texttt{prepare\_input} function, which ensures that each board is represented as a tensor suitable for training the CNN. This function transforms the board matrix into a PyTorch tensor, adding a batch dimension for proper input formatting.
+
+\begin{lstlisting}[language=Python, caption={Preparing input tensor for CNN}]
+def prepare_input(board: Board):
+    matrix = board_to_matrix(board)
+    X_tensor = torch.tensor(matrix, dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+    return X_tensor
+\end{lstlisting}
+
+After this conversion, the input tensor \texttt{X\_tensor} can be fed into the CNN model, where the neural network learns to predict the next move based on the board state.
+
+By transforming each board into a tensor and encoding the next move as an integer, we create a training set where the network can learn from the patterns in board positions and move sequences.
+
+\subsubsection{Model Design and Training in PyTorch}
+
+In order to train our CNN model in PyTorch, we need to perform three main steps:
+
+\begin{enumerate}
+    \item \textbf{Create a custom Dataset class} to handle input data (board positions) and targets (encoded moves).
+    \item \textbf{Define the CNN model class} that specifies the network architecture.
+    \item \textbf{Implement a training loop} to feed data through the model, compute loss, and update parameters.
+\end{enumerate}
+
+\paragraph{Model Architecture}
+
+The CNN model is defined using PyTorch’s \texttt{nn.Module} class. It includes convolutional layers for feature extraction, a max pooling operation for dimensionality reduction, and fully connected (dense) layers for move prediction.
+
+\begin{lstlisting}[language=Python, caption={CNN architecture for chess move prediction}]
+class ChessModel(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.conv1 = nn.Conv2d(13, 64, kernel_size=3, padding=1)   
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)  
+        self.flatten = nn.Flatten()                               
+        self.fc1 = nn.Linear(8 * 8 * 128, 256)                     
+        self.fc2 = nn.Linear(256, num_classes)                     
+        self.relu = nn.ReLU()                                    
+\end{lstlisting}
+
+\paragraph{Explanation of Layers}
+
+\begin{itemize}
+    \item \textbf{Convolution Layers:}  
+    These layers apply filters over the input tensor to detect spatial patterns such as piece arrangements and threats on the chessboard.  
+    In our model, \texttt{conv1} and \texttt{conv2} extract increasingly abstract features from the $13\times8\times8$ input tensor.
+
+    \item \textbf{Max Pooling Layer:}  
+    Although not explicitly shown in the code above, a max pooling operation is commonly inserted after a convolution layer to reduce spatial dimensions and retain the most important features.  
+    The illustration below shows how max pooling reduces an input feature map by taking the maximum value within each region.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.6\textwidth]{images/maxpool.png}
+        \caption{Example of Max Pooling operation (source: GeeksforGeeks).}
+    \end{figure}
+
+    \item \textbf{Dense (Fully Connected) Layers:}  
+    After flattening the feature maps, fully connected layers (\texttt{fc1} and \texttt{fc2}) interpret the extracted features and output probabilities for each possible move class.  
+    The final layer outputs a vector of size \texttt{num\_classes}, corresponding to all possible moves.
+\end{itemize}
+
+\paragraph{Training Loop Overview}
+
+During training, the model repeatedly goes through the dataset in several passes called \emph{epochs}. In each step, a batch of board 
+positions is fed into the model, which predicts the next move. The difference between the prediction and the correct move (called the 
+\emph{loss}) is calculated, and the model adjusts its internal parameters to reduce this error. Over time, this process helps the 
+network learn to make better move predictions from board states.
+
 \subsubsection{CNN Architecture and Training}
 The CNN is implemented in both \textbf{PyTorch} and \textbf{TensorFlow}, using standard convolutional layers to process the $13\times8\times8$ input tensor.  
 The network is trained to predict the next move from the dataset of high-rated Lichess games. The loss function is cross-entropy over the possible legal moves, and the output is masked to only allow legal moves during inference.
 
-\subsubsection{Integration with the Engine}
-During gameplay, the CNN predicts the most probable moves given the current position. These predictions can:
-\begin{itemize}
-    \item Serve as a move ordering heuristic for the search-based engine.
-    \item Act as a standalone move predictor without search for fast evaluation.
-\end{itemize}
-
-This hybrid approach combines deep learning with classical search, leveraging both learned patterns and precise evaluation.
-
-
 \section{Dataset and Training}
-A dataset of 1M expert games from Lichess was parsed using PGN files. Each board position was converted into input tensors with one-hot encoded pieces. The model was trained for 20 epochs using the Adam optimizer, achieving a top-1 accuracy of 62\% and top-3 accuracy of 84\%.
 
-\section{Results}
-\subsection{Search Engine}
-The Minimax engine searched approximately \(2 \times 10^5\) nodes per move at depth 4, with Alpha-Beta pruning improving performance by 35\%. Move ordering and transposition tables further reduced branching.
+A dataset of 10000 expert games played by Lichess players rated 2300+ from August 2025 was collected and parsed from PGN files. Each game was processed to extract board positions and corresponding next moves. Every board position was converted into a $13\times8\times8$ tensor representation using one-hot encoding for each piece type and color.
 
-\subsection{CNN Model}
-The CNN achieved good prediction performance, particularly in opening and midgame phases. However, it struggled in complex tactical positions requiring deep search.
-
-\subsection{Comparison}
-\begin{itemize}
-    \item \textbf{Minimax:} precise but computationally heavy.
-    \item \textbf{CNN:} fast inference but limited tactical understanding.
-    \item \textbf{Hybrid:} potential to combine CNN evaluation within search.
-\end{itemize}
+Both \texttt{PyTorch} and \texttt{TensorFlow} implementations of the CNN model were developed and trained for comparison. These neural models were then compared against classical search-based approaches, including a pure Minimax algorithm and an enhanced Negamax version with move ordering and a transposition table for improved search efficiency.
 
 \section{Conclusion and Future Work}
-The project demonstrates both symbolic and neural approaches to chess AI. Future improvements include integrating the CNN as an evaluation function for the Minimax algorithm (similar to AlphaZero) and experimenting with reinforcement learning for self-play training.
+
+This project explored multiple approaches to chess AI, combining both symbolic and neural methods. The convolutional neural network demonstrated the ability to learn meaningful spatial patterns from board states and predict strong candidate moves with competitive accuracy. When compared to traditional Minimax and enhanced Negamax algorithms, the neural models provided faster evaluations once trained, highlighting the strength of deep learning approaches in decision-making tasks.
+
+For future work, the CNN can be integrated as an evaluation function within the Negamax search, similar to AlphaZero’s design, enabling a hybrid AI that leverages both search-based reasoning and neural evaluation. Additionally, reinforcement learning and self-play training could be employed to further improve the model’s strategic understanding and adaptability without relying solely on human game data.
 
 \begin{thebibliography}{9}
 \bibitem{russell}
