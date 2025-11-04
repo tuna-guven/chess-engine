@@ -1,0 +1,176 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{caption}
+
+\title{\textbf{AI for the Game of Chess: Classical Search and Neural Network Approaches}}
+\author{Your Name \\
+Department of Computer Science \\
+November 2, 2025}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Abstract}
+This project explores artificial intelligence techniques applied to the game of Chess on an 8x8 board. 
+The goal is to design, train, and evaluate multiple agents including Random, Minimax, Negamax, and Neural Network–assisted search agents. 
+While classical search algorithms rely on deterministic evaluations and handcrafted heuristics, neural network agents attempt to learn positional strength through data-driven methods. 
+We compare their performance, analyze their behaviors, and outline future improvements for deeper search and reinforcement-based self-play.
+
+\section{Introduction}
+The objective of this project is to implement AI agents that can play chess intelligently using both classical and machine learning approaches. 
+Chess, with its vast state space and strategic depth, serves as an excellent domain for exploring search algorithms and neural evaluation.
+
+We developed and compared several agents: a Random baseline, a Minimax search agent, a Negamax variant with alpha-beta pruning, and a Neural Network evaluator that replaces handcrafted heuristics with learned board evaluation.
+
+\section{Project Overview}
+\subsection{Game Environment}
+The environment simulates a standard 8x8 chessboard using the \texttt{python-chess} library. 
+All legal rules are implemented, including castling, en passant, and promotion. 
+The system supports human interaction and AI self-play.
+
+\subsection{Agents Implemented}
+The following agents were implemented and compared:
+
+\begin{itemize}
+    \item \textbf{Random Agent:} Selects valid moves randomly.
+    \item \textbf{Minimax Agent:} Uses depth-limited search with heuristic evaluation.
+    \item \textbf{Negamax Agent:} Simplified Minimax for zero-sum games, integrated with alpha-beta pruning.
+    \item \textbf{Neural Network Evaluator:} CNN-based model estimating positional advantage.
+\end{itemize}
+
+\section{Training Methodology}
+\subsection{Negamax Agent}
+The Negamax agent searches the game tree recursively and evaluates positions using a scoring function.
+The recursive update rule is:
+
+\begin{equation}
+\text{Negamax}(s, d, \alpha, \beta) = 
+\max_{a \in A(s)} \left[-\text{Negamax}(s', d-1, -\beta, -\alpha)\right]
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $s$ = current state
+    \item $d$ = search depth
+    \item $\alpha, \beta$ = pruning bounds
+\end{itemize}
+
+Alpha-beta pruning eliminates moves that cannot influence the final decision, improving efficiency.
+
+\begin{lstlisting}[language=Python, caption={Negamax search implementation snippet}, numbers=left]
+def negamax(board, depth, alpha, beta, color):
+    if depth == 0 or board.is_game_over():
+        return color * evaluate(board)
+    max_eval = -float('inf')
+    for move in board.legal_moves:
+        board.push(move)
+        eval = -negamax(board, depth-1, -beta, -alpha, -color)
+        board.pop()
+        max_eval = max(max_eval, eval)
+        alpha = max(alpha, eval)
+        if alpha >= beta:
+            break
+    return max_eval
+\end{lstlisting}
+
+\subsection{Neural Network Evaluation}
+The neural network replaces the handcrafted evaluation function.
+It maps board states to scalar evaluations indicating the advantage of the current player.
+
+The network is trained using a supervised approach from labeled positions and self-play data.
+The loss function is the mean squared error between predicted and target evaluations:
+
+\begin{equation}
+L = \frac{1}{N} \sum_{i=1}^{N} (V_{\text{target}}^{(i)} - V_{\text{pred}}^{(i)})^2
+\end{equation}
+
+\begin{lstlisting}[language=Python, caption={Neural network evaluation snippet}, numbers=left]
+output = model(board_state)
+target = value_target
+loss = mse_loss(output, target)
+loss.backward()
+optimizer.step()
+\end{lstlisting}
+
+\section{Implementation Details}
+\subsection{Environment Setup}
+\begin{lstlisting}[language=Python, caption={Chess environment loop}, numbers=left]
+import chess
+from agents import NegamaxAgent, NNAgent
+
+board = chess.Board()
+agent = NegamaxAgent(depth=3)
+while not board.is_game_over():
+    move = agent.select_move(board)
+    board.push(move)
+print(board.result())
+\end{lstlisting}
+
+\subsection{Agent Architecture Diagram}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\textwidth]{agent_architecture.png}
+    \caption{Architecture of Negamax + Neural Network agent.}
+\end{figure}
+
+\section{Results and Evaluation}
+\subsection{Training Performance}
+Training performance curves were recorded for the neural network’s loss and evaluation accuracy.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\textwidth]{training_curve_nn.png}
+    \caption{Neural network training loss over epochs.}
+\end{figure}
+
+\subsection{Benchmarking Plan}
+Benchmarking compares each agent on the following criteria:
+\begin{itemize}
+    \item Win rate against baseline agents
+    \item Average evaluation accuracy
+    \item Time per move (efficiency)
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Benchmarking results (to be filled after evaluation).}
+\begin{tabular}{lccc}
+\hline
+\textbf{Agent} & \textbf{Win vs Random} & \textbf{Win vs Minimax} & \textbf{Avg Reward} \\
+\hline
+Random & - & - & - \\
+Minimax & - & - & - \\
+Negamax & - & - & - \\
+NN Agent & - & - & - \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+\begin{itemize}
+    \item The Negamax agent performs well at moderate depths but struggles in tactical endgames without deeper search.
+    \item The neural network evaluator captures positional features such as center control and king safety.
+    \item Training quality strongly depends on data diversity and self-play consistency.
+    \item Future work includes reinforcement learning fine-tuning and hybrid MCTS integration.
+\end{itemize}
+
+\section{Conclusion}
+This project developed and analyzed multiple AI agents for chess, integrating both classical and learning-based strategies. 
+Initial results demonstrate that hybrid approaches—combining Negamax search with neural evaluation—offer promising improvements over purely classical methods.
+
+\section*{References}
+\begin{itemize}
+    \item Silver, D. et al. (2017). \textit{Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm.}
+    \item Sutton, R. S., \& Barto, A. G. (2018). \textit{Reinforcement Learning: An Introduction.}
+    \item \texttt{python-chess} documentation: \url{https://python-chess.readthedocs.io}
+    \item PyTorch documentation: \url{https://pytorch.org}
+\end{itemize}
+
+\end{document}

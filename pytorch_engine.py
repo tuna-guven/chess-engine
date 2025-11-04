@@ -1,9 +1,8 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from chess_cli import ChessCLI
+from chess_gui import ChessGUI
 from chess_gui import ChessGUI
 import pickle
 from chess import Board
