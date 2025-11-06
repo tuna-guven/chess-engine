@@ -2,7 +2,6 @@ import chess
 import math
 from chess_gui import ChessGUI
 
-# --- Negamax subclass with depth parameter ---
 class Negamax(ChessGUI):
     piece_values = {
         chess.PAWN: 100,
@@ -18,7 +17,6 @@ class Negamax(ChessGUI):
         self.transposition_table = {}
         self.max_depth = depth  # Depth for negamax search
 
-    # --- Basic material evaluation ---
     def evaluate_board(self, board):
         value = 0
         for square in chess.SQUARES:
@@ -71,7 +69,6 @@ class Negamax(ChessGUI):
         self.transposition_table[board_key] = {"value": max_eval, "depth": depth}
         return max_eval
 
-    # --- Search best move ---
     def search_best_move(self, board, depth):
         best_move = None
         max_eval = -math.inf
@@ -85,7 +82,6 @@ class Negamax(ChessGUI):
                 best_move = move
         return best_move
 
-    # --- AI move with iterative deepening ---
     def ai_move(self, board):
         best_move = None
         for depth in range(1, self.max_depth + 1):
